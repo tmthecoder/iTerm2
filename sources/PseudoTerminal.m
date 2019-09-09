@@ -3755,9 +3755,11 @@ ITERM_WEAKLY_REFERENCEABLE
         DLog(@"windowDidResignKey not auto-hiding hotkey window because the character panel is open.");
     }
 
+    NSWindow *newKeyWindow = [NSApp keyWindow] ?: [[iTermApplication sharedApplication] it_windowBecomingKey];
+    DLog(@"Window %@ resiging key. New key window (or key-window-elect) is %@", self, newKeyWindow);
     if (shouldAutoHideHotkeyWindow) {
         NSArray<NSWindowController *> *siblings = [[iTermHotKeyController sharedInstance] siblingWindowControllersOf:self];
-        NSWindowController *newKeyWindowController = [[NSApp keyWindow] windowController];
+        NSWindowController *newKeyWindowController = [newKeyWindow windowController];
         if (![siblings containsObject:newKeyWindowController]) {
             [[iTermHotKeyController sharedInstance] autoHideHotKeyWindows:siblings];
         }
@@ -7537,7 +7539,11 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
         // We assign directly to isDivorced because we know the GUID is unique and in sessions
         // instance and the original guid is already set. This might be possible to do earlier,
         // but I'm afraid of introducing bugs.
-        newSession.isDivorced = YES;
+        // NOTE: I'm pretty sure there's a bug where the guid somehow ceases to
+        // be in the sessions instance and we assert later.
+        [newSession setIsDivorced:YES
+                       withDecree:[NSString stringWithFormat:@"Split vertically with guid %@",
+                                   newSession.profile[KEY_GUID]]];
     }
     if (![newSession.tabColor isEqual:tabColor] && newSession.tabColor != tabColor) {
         newSession.tabColor = tabColor;
@@ -7911,31 +7917,23 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
     }
 }
 
-- (IBAction)movePaneDividerRight:(id)sender
-{
-    int width = [[[self currentSession] textview] charWidth];
-    [[self currentTab] moveCurrentSessionDividerBy:width
+- (IBAction)movePaneDividerRight:(id)sender {
+    [[self currentTab] moveCurrentSessionDividerBy:1
                                       horizontally:YES];
 }
 
-- (IBAction)movePaneDividerLeft:(id)sender
-{
-    int width = [[[self currentSession] textview] charWidth];
-    [[self currentTab] moveCurrentSessionDividerBy:-width
+- (IBAction)movePaneDividerLeft:(id)sender {
+    [[self currentTab] moveCurrentSessionDividerBy:-1
                                       horizontally:YES];
 }
 
-- (IBAction)movePaneDividerDown:(id)sender
-{
-    int height = [[[self currentSession] textview] lineHeight];
-    [[self currentTab] moveCurrentSessionDividerBy:height
+- (IBAction)movePaneDividerDown:(id)sender {
+    [[self currentTab] moveCurrentSessionDividerBy:1
                                       horizontally:NO];
 }
 
-- (IBAction)movePaneDividerUp:(id)sender
-{
-    int height = [[[self currentSession] textview] lineHeight];
-    [[self currentTab] moveCurrentSessionDividerBy:-height
+- (IBAction)movePaneDividerUp:(id)sender {
+    [[self currentTab] moveCurrentSessionDividerBy:-1
                                       horizontally:NO];
 }
 
@@ -8276,6 +8274,8 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
     for (PTYTab *aTab in [self tabs]) {
         for (PTYSession *aSession in [aTab sessions]) {
             [aTab fitSessionToCurrentViewSize:aSession];
+            // Theme change affects scrollbar color.
+            [aSession.textview updateScrollerForBackgroundColor];
         }
         // Theme change could affect tab icons
         [aTab updateIcon];
@@ -9343,20 +9343,16 @@ static CGFloat iTermDimmingAmount(PSMTabBarControl *tabView) {
         }
         return [[iTermShellHistoryController sharedInstance] haveDirectoriesForHost:[[self currentSession] currentHost]];
     } else if ([item action] == @selector(movePaneDividerDown:)) {
-        int height = [[[self currentSession] textview] lineHeight];
-        return [[self currentTab] canMoveCurrentSessionDividerBy:height
+        return [[self currentTab] canMoveCurrentSessionDividerBy:1
                                                     horizontally:NO];
     } else if ([item action] == @selector(movePaneDividerUp:)) {
-        int height = [[[self currentSession] textview] lineHeight];
-        return [[self currentTab] canMoveCurrentSessionDividerBy:-height
+        return [[self currentTab] canMoveCurrentSessionDividerBy:-1
                                                     horizontally:NO];
     } else if ([item action] == @selector(movePaneDividerRight:)) {
-        int width = [[[self currentSession] textview] charWidth];
-        return [[self currentTab] canMoveCurrentSessionDividerBy:width
+        return [[self currentTab] canMoveCurrentSessionDividerBy:1
                                                     horizontally:YES];
     } else if ([item action] == @selector(movePaneDividerLeft:)) {
-        int width = [[[self currentSession] textview] charWidth];
-        return [[self currentTab] canMoveCurrentSessionDividerBy:-width
+        return [[self currentTab] canMoveCurrentSessionDividerBy:-1
                                                     horizontally:YES];
     } else if ([item action] == @selector(duplicateTab:)) {
         return ![[self currentTab] isTmuxTab];

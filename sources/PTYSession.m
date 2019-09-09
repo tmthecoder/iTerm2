@@ -536,6 +536,8 @@ static const NSUInteger kMaxHosts = 100;
     NSString *_divorceDecree;
 }
 
+@synthesize isDivorced = _divorced;
+
 + (NSMapTable<NSString *, PTYSession *> *)sessionMap {
     static NSMapTable *map;
     static dispatch_once_t onceToken;
@@ -2745,6 +2747,7 @@ ITERM_WEAKLY_REFERENCEABLE
                                       height:1
                                        units:kVT100TerminalUnitsCells
                          preserveAspectRatio:NO
+                                     roundUp:YES
                                        inset:zeroInset
                                        image:[NSImage it_imageNamed:@"BrokenPipeDivider" forClass:self.class]
                                         data:nil];
@@ -2758,6 +2761,7 @@ ITERM_WEAKLY_REFERENCEABLE
                                       height:1
                                        units:kVT100TerminalUnitsCells
                          preserveAspectRatio:NO
+                                     roundUp:YES
                                        inset:zeroInset
                                        image:[NSImage it_imageNamed:@"BrokenPipeDivider" forClass:self.class]
                                         data:nil];
@@ -3028,7 +3032,7 @@ ITERM_WEAKLY_REFERENCEABLE
                                    inBookmark:temp];
 
     ProfileModel* model;
-    if (_isDivorced) {
+    if (self.isDivorced) {
         model = [ProfileModel sessionsInstance];
     } else {
         model = [ProfileModel sharedInstance];
@@ -3043,7 +3047,7 @@ ITERM_WEAKLY_REFERENCEABLE
 - (void)_setKeepOutdatedKeyMapping
 {
     ProfileModel* model;
-    if (_isDivorced) {
+    if (self.isDivorced) {
         model = [ProfileModel sessionsInstance];
     } else {
         model = [ProfileModel sharedInstance];
@@ -3433,7 +3437,7 @@ ITERM_WEAKLY_REFERENCEABLE
     if (!updatedProfile) {
         return;
     }
-    if (!_isDivorced) {
+    if (!self.isDivorced) {
         [self setPreferencesFromAddressBookEntry:updatedProfile];
         [self setProfile:updatedProfile];
         return;
@@ -3480,7 +3484,7 @@ ITERM_WEAKLY_REFERENCEABLE
 
 - (void)sessionProfileDidChange
 {
-    if (!_isDivorced) {
+    if (!self.isDivorced) {
         return;
     }
     NSDictionary *updatedProfile =
@@ -3524,7 +3528,7 @@ ITERM_WEAKLY_REFERENCEABLE
         _originalProfile = [sharedProfile copy];
     }
 
-    if (_isDivorced) {
+    if (self.isDivorced) {
         NSDictionary *sessionProfile = [[ProfileModel sessionsInstance] bookmarkWithGuid:_profile[KEY_GUID]];
         if (![sessionProfile isEqual:_profile]) {
             DLog(@"Session profile changed");
@@ -3918,6 +3922,17 @@ ITERM_WEAKLY_REFERENCEABLE
     return [self.variablesScope valueForVariableName:iTermVariableKeySessionName] ?: [self.variablesScope valueForVariableName:iTermVariableKeySessionProfileName] ?: @"Untitled";
 }
 
+- (void)setIconName:(NSString *)theName {
+    [self.variablesScope setValuesFromDictionary:@{ iTermVariableKeySessionAutoNameFormat: theName ?: [NSNull null],
+                                                    iTermVariableKeySessionIconName: theName ?: [NSNull null] }];
+    [_tmuxTitleMonitor updateOnce];
+}
+
+- (void)setWindowTitle:(NSString *)title {
+    [self.variablesScope setValue:title forVariableNamed:iTermVariableKeySessionWindowName];
+    [_tmuxTitleMonitor updateOnce];
+}
+
 - (BOOL)shouldShowTabGraphic {
     return [self shouldShowTabGraphicForProfile:self.profile];
 }
@@ -3970,8 +3985,8 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)popWindowTitle {
-    [self.variablesScope setValue:[_nameController popWindowTitle]
-                 forVariableNamed:iTermVariableKeySessionWindowName];
+    NSString *title = [_nameController popWindowTitle];
+    [self setWindowTitle:title];
 }
 
 - (void)pushIconTitle {
@@ -3979,8 +3994,8 @@ ITERM_WEAKLY_REFERENCEABLE
 }
 
 - (void)popIconTitle {
-    [self.variablesScope setValue:[_nameController popIconTitle]
-                 forVariableNamed:iTermVariableKeySessionIconName];
+    NSString *theName = [_nameController popIconTitle];
+    [self setIconName:theName];
 }
 
 - (VT100Terminal *)terminal
@@ -4683,7 +4698,7 @@ ITERM_WEAKLY_REFERENCEABLE
 - (void)savedArrangementWasRepaired:(NSNotification *)notification {
     if ([notification.object isEqual:_missingSavedArrangementProfileGUID]) {
         Profile *newProfile = notification.userInfo[@"new profile"];
-        _isDivorced = NO;
+        [self setIsDivorced:NO withDecree:@"Saved arrangement was repaired. Set divorced to NO."];
         [_overriddenFields removeAllObjects];
         [_originalProfile release];
         _originalProfile = nil;
@@ -4784,7 +4799,7 @@ ITERM_WEAKLY_REFERENCEABLE
     }
     [self setFont:font nonAsciiFont:nonAsciiFont horizontalSpacing:hs verticalSpacing:vs];
 
-    if (dir || _isDivorced) {
+    if (dir || self.isDivorced) {
         // Move this bookmark into the sessions model.
         NSString* guid = [self divorceAddressBookEntryFromPreferences];
 
@@ -4891,9 +4906,8 @@ ITERM_WEAKLY_REFERENCEABLE
     [self reloadProfile];
 }
 
-- (void)remarry
-{
-    _isDivorced = NO;
+- (void)remarry {
+    [self setIsDivorced:NO withDecree:[NSString stringWithFormat:@"Remarry"]];
 }
 
 // TBH I'm not 100% sure this is correct. Don't use it for anything critical until this whole mess
@@ -4911,6 +4925,19 @@ ITERM_WEAKLY_REFERENCEABLE
     return nil;
 }
 
+- (BOOL)isDivorced {
+    return _divorced;
+}
+
+- (void)setIsDivorced:(BOOL)isDivorced withDecree:(NSString *)decree {
+    _divorced = isDivorced;
+    NSString *guid = self.profile[KEY_GUID];
+    if (guid) {
+        [[ProfileModel sessionsInstance] addGuidToDebug:guid];
+    }
+    [self setDivorceDecree:[NSString stringWithFormat:@"isDivorced=%@ Decree=%@ guid=%@ Stack:\n%@", @(isDivorced), decree, guid, [NSThread callStackSymbols]]];
+}
+
 - (void)setDivorceDecree:(NSString *)decree {
     [_divorceDecree autorelease];
     _divorceDecree = [decree copy];
@@ -4924,13 +4951,13 @@ ITERM_WEAKLY_REFERENCEABLE
 - (NSString *)divorceAddressBookEntryFromPreferences {
     Profile *bookmark = [self profile];
     NSString *guid = [bookmark objectForKey:KEY_GUID];
-    if (_isDivorced) {
+    if (self.isDivorced) {
         ITAssertWithMessage([[ProfileModel sessionsInstance] bookmarkWithGuid:guid] != nil,
                             @"I am divorced with guid %@ but the sessions instance has no such guid. Log:\n%@\n\nModel log:\n%@",
                             guid, _divorceDecree, [[ProfileModel sessionsInstance] debugHistoryForGuid:guid]);
         return guid;
     }
-    _isDivorced = YES;
+    [self setIsDivorced:YES withDecree:@"PLACEHOLDER DECREE"];
     NSMutableArray<NSString *> *logs = [NSMutableArray array];
     DIVORCE_LOG(@"Remove profile with guid %@ from sessions instance", guid);
     [[ProfileModel sessionsInstance] removeProfileWithGuid:guid];
@@ -5552,6 +5579,21 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         // bounds and get clipped in the texture.
         asciiOffset.height = -floor(rect.origin.y * scale);
     }
+    if (iTermTextIsMonochrome() && rect.origin.x < 0) {
+        // AnonymousPro has a similar problem (issue 8185), e.g. with "W".
+        // There is a subtle difference, though! The monochrome code path assumes that glyphs are
+        // left-aligned in their glyphSize-sized chunk of the texture. Setting the asciiOffset here
+        // causes them to all be rendered a few pixels to the right so that this assumption will be
+        // true. The quad is then shifted left by a corresponding amount when rendering so it ends
+        // up drawn in the right place.
+        //
+        // When doing subpixel antialiasing, this is not an issue because it deals with multipart
+        // ASCII glyphs differently. It splits them into pieces and draws them as separate instances.
+        //
+        // Changing the assumption that glyphs are left-aligned would be very complex, and I can't
+        // afford to add more risk right now. This is less than beautiful, but it's quite safe.
+        asciiOffset.width = -floor(rect.origin.x * scale);
+    }
     if (iTermTextIsMonochrome()) {
         // Mojave can use a glyph size larger than cell size because compositing is trivial without subpixel AA.
         glyphSize.width = round(0.49 + MAX(cellSize.width, NSMaxX(rect)));
@@ -5738,12 +5780,15 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         switch (tmuxMode) {
             case TMUX_NONE:
                 name = nil;
+                _terminal.tmuxMode = NO;
                 break;
             case TMUX_GATEWAY:
                 name = @"gateway";
+                _terminal.tmuxMode = NO;
                 break;
             case TMUX_CLIENT:
                 name = @"client";
+                _terminal.tmuxMode = YES;
                 [self loadTmuxProcessID];
                 [self installTmuxStatusBarMonitor];
                 [self installTmuxTitleMonitor];
@@ -5849,7 +5894,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
         model = [ProfileModel sharedInstance];
         profile = [[ProfileModel sharedInstance] tmuxProfile];
     } else {
-        if (_isDivorced) {
+        if (self.isDivorced) {
             model = [ProfileModel sessionsInstance];
         } else {
             model = [ProfileModel sharedInstance];
@@ -6883,7 +6928,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
             // profile may not exist so this could do nothing.
             ProfileModel *model = [ProfileModel sharedInstance];
             Profile *profile;
-            if (_isDivorced) {
+            if (self.isDivorced) {
                 profile = [[ProfileModel sharedInstance] bookmarkWithGuid:_profile[KEY_ORIGINAL_GUID]];
             } else {
                 profile = self.profile;
@@ -8217,6 +8262,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     return self.variablesScope;
 }
 
+- (BOOL)textViewTerminalBackgroundColorDeterminesWindowDecorationColor {
+    return self.view.window.ptyWindow.it_terminalWindowUseMinimalStyle;
+}
+
 - (void)bury {
     if (self.isTmuxClient) {
         if (!self.delegate) {
@@ -8600,8 +8649,7 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     // The window name doesn't normally serve as an interpolated string, but just to be extra safe
     // break up \(.
     title = [title stringByReplacingOccurrencesOfString:@"\\(" withString:@"\\\u200B("];
-    [self.variablesScope setValue:title forVariableNamed:iTermVariableKeySessionWindowName];
-    [_tmuxTitleMonitor updateOnce];
+    [self setWindowTitle:title];
 }
 
 - (NSString *)screenWindowTitle {
@@ -8615,10 +8663,23 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 - (void)screenSetIconName:(NSString *)theName {
     // Put a zero-width space in between \ and ( to avoid interpolated strings coming from the server.
     theName = [theName stringByReplacingOccurrencesOfString:@"\\(" withString:@"\\\u200B("];
-    [self.variablesScope setValuesFromDictionary:@{ iTermVariableKeySessionAutoNameFormat: theName ?: [NSNull null],
-                                                    iTermVariableKeySessionIconName: theName ?: [NSNull null] }];
-    [_tmuxTitleMonitor updateOnce];
-    
+    [self setIconName:theName];
+    [self enableSessionNameTitleComponentIfPossible];
+}
+
+- (void)enableSessionNameTitleComponentIfPossible {
+    // Turn on the session name component so the icon name will be visible.
+    iTermTitleComponents components = [iTermProfilePreferences unsignedIntegerForKey:KEY_TITLE_COMPONENTS
+                                                                           inProfile:self.profile];
+    if (components & iTermTitleComponentsCustom) {
+        return;
+    }
+    if (components & iTermTitleComponentsSessionName) {
+        return;
+    }
+    components |= iTermTitleComponentsSessionName;
+    [self setSessionSpecificProfileValues:@{ KEY_TITLE_COMPONENTS: @(components) }];
+
 }
 
 - (BOOL)screenWindowIsFullscreen {
@@ -8731,10 +8792,6 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
 
 - (void)screenHandleTmuxInput:(VT100Token *)token {
     [_tmuxGateway executeToken:token];
-}
-
-- (BOOL)screenInTmuxMode {
-    return [self isTmuxClient];
 }
 
 - (BOOL)screenShouldTreatAmbiguousCharsAsDoubleWidth {
@@ -9657,6 +9714,10 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     if (range.end.y - range.start.y > kMaxLines) {
         range.end.y = range.start.y + kMaxLines;
     }
+    const int width = _screen.width;
+    range.end.x = MIN(range.end.x, width - 1);
+    range.start.x = MIN(range.start.x, width - 1);
+
     iTermTextExtractor *extractor = [iTermTextExtractor textExtractorWithDataSource:_screen];
     return [extractor haveNonWhitespaceInFirstLineOfRange:VT100GridWindowedRangeMake(range, 0, 0)];
 }
@@ -11310,6 +11371,18 @@ scrollToFirstResult:(BOOL)scrollToFirstResult {
     [panel.window makeKeyAndOrderFront:nil];
 }
 
+- (void)statusBarDisable {
+    if (self.isDivorced) {
+        [self setSessionSpecificProfileValues:@{ KEY_SHOW_STATUS_BAR: @NO }];
+    } else {
+        [iTermProfilePreferences setBool:NO
+                                  forKey:KEY_SHOW_STATUS_BAR
+                               inProfile:self.profile
+                                   model:[ProfileModel sharedInstance]];
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:kSessionProfileDidChange
+                                                        object:_profile[KEY_GUID]];
+}
 
 - (void)statusBarSetLayout:(nonnull iTermStatusBarLayout *)layout {
     ProfileModel *model;
