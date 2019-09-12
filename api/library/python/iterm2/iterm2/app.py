@@ -56,6 +56,20 @@ class App:
         windows = App._windows_from_list_sessions_response(connection, list_sessions_response)
         buried_sessions = App._buried_sessions_from_list_sessions_response(connection, list_sessions_response)
         app = App(connection, windows, buried_sessions)
+
+        def get_tab_from_session(session):
+            w, t = app.get_window_and_tab_for_session(session)
+            return t
+        def get_window_from_session(session):
+            w, t = app.get_window_and_tab_for_session(session)
+            return w
+        def get_window_from_tab(tab):
+            return app.get_window_for_tab(tab.tab_id)
+
+        iterm2.Session.get_tab = get_tab_from_session
+        iterm2.Session.get_window = get_window_from_session
+        iterm2.Tab.get_window = get_window_from_tab
+
         await app._async_listen()
         await app.async_refresh_focus()
         await app.async_refresh_broadcast_domains()
@@ -326,7 +340,7 @@ class App:
         return domain_list
 
     @property
-    def current_terminal_window(self) -> typing.Union[iterm2.window.Window, None]:
+    def current_window(self) -> typing.Optional[iterm2.window.Window]:
         """Gets the topmost terminal window.
 
         The current terminal window is the window that receives keyboard input
@@ -337,12 +351,22 @@ class App:
         return self.get_window_by_id(self.current_terminal_window_id)
 
     @property
-    def terminal_windows(self) -> typing.List[iterm2.window.Window]:
+    def current_terminal_window(self) -> typing.Union[iterm2.window.Window, None]:
+        """Deprecated in favor of current_window."""
+        return self.current_window
+
+    @property
+    def windows(self) -> typing.List[iterm2.window.Window]:
         """Returns a list of all terminal windows.
 
         :returns: A list of :class:`Window`
         """
         return self.__terminal_windows
+
+    @property
+    def terminal_windows(self) -> typing.List[iterm2.window.Window]:
+        """Deprecated in favor of `windows`"""
+        return self.windows
 
     @property
     def buried_sessions(self) -> typing.List[iterm2.session.Session]:
