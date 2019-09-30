@@ -8,6 +8,7 @@
 #import "iTermData.h"
 
 #import "DebugLogging.h"
+
 #import "iTermMalloc.h"
 
 static const unsigned char iTermDataGuardRegionValue[64] = {

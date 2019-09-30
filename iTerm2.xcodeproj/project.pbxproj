@@ -14334,6 +14334,7 @@
 				HEADER_SEARCH_PATHS = (
 					ThirdParty,
 					ThirdParty/libsixel/include,
+					Core/,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OTHER_CFLAGS = "-DBETA=1";
@@ -14394,6 +14395,7 @@
 				HEADER_SEARCH_PATHS = (
 					ThirdParty,
 					ThirdParty/libsixel/include,
+					Core/,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				ONLY_ACTIVE_ARCH = YES;
@@ -14454,6 +14456,7 @@
 				HEADER_SEARCH_PATHS = (
 					ThirdParty,
 					ThirdParty/libsixel/include,
+					Core/,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OTHER_LDFLAGS = "";
@@ -14508,6 +14511,7 @@
 				HEADER_SEARCH_PATHS = (
 					ThirdParty,
 					ThirdParty/libsixel/include,
+					Core/,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OTHER_CFLAGS = "-DBETA=1";
